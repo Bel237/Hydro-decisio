@@ -59,3 +59,11 @@ html, body, [data-testid="stAppViewContainer"] {
     font-weight: 700;
     transition: all 0.3s;
 }
+
+/* Rend le logo circulaire */
+.logo-container img {
+    border-radius: 50%;
+    border: 2px solid #1b5e20; /* Optionnel : un petit liseré vert pour le style */
+    object-fit: cover; /* Garde les proportions si l'image n'est pas parfaitement carrée */
+    height: 60px; /* Doit être égal au width pour un cercle parfait */
+}
