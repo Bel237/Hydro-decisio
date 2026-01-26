@@ -4,8 +4,8 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from engine.ahp_logic import AHPEngine
-from streamlit_folium import folium_static
 import folium
+from streamlit_folium import st_folium
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos # Import pour corriger les warnings PDF
 
@@ -18,7 +18,7 @@ if "page" not in st.session_state:
     st.session_state.page = "home"
 
 # --- LOGIQUE PDF (MISE À JOUR POUR ÉVITER LES WARNINGS) ---
-def generate_pdf(score_cw, score_f, weights, cr, recommendation, fin_data):
+def generate_pdf(score_cw, score_f, weights, cr, recommendation, fin_data, uploaded_images=[], gps_coords=None):
     # Initialisation
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_margin(20)
@@ -27,7 +27,8 @@ def generate_pdf(score_cw, score_f, weights, cr, recommendation, fin_data):
     # --- EN-TÊTE ---
     pdf.set_fill_color(0, 51, 153)
     pdf.rect(0, 0, 210, 40, "F")
-    
+
+
     pdf.set_y(15)
     pdf.set_font("Helvetica", "B", 22)
     pdf.set_text_color(255, 255, 255)
@@ -93,7 +94,35 @@ def generate_pdf(score_cw, score_f, weights, cr, recommendation, fin_data):
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 16)
     pdf.cell(0, 20, f"DECISION PRECONISEE : {recommendation}", align="C", fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-
+    if gps_coords:
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.cell(0, 10, f"Localisation GPS du site : {gps_coords[0]:.5f} N, {gps_coords[1]:.5f} E", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            google_url = f"https://www.google.com/maps?q={gps_coords[0]},{gps_coords[1]}"
+            pdf.set_font("Helvetica", "U", 10)
+            pdf.set_text_color(0, 0, 255) # Bleu lien
+            pdf.cell(0, 10, "Voir sur Google Maps", link=google_url, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.set_text_color(0, 0, 0) 
+    if uploaded_images:
+        for i, img in enumerate(uploaded_images):
+            pdf.add_page()
+            pdf.set_font("Helvetica", "B", 14)
+            pdf.cell(0, 10, f"4.{i+1} Documentation Photo - Vue {i+1}", border="B", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.ln(5)
+            
+            # Sauvegarde temporaire avec un nom unique par image
+            img_path = f"temp_site_img_{i}.png"
+            with open(img_path, "wb") as f:
+                f.write(img.getbuffer())
+            
+            # Insertion de l'image
+            pdf.image(img_path, x=20, w=170)
+            
+            # Ajout de la légende automatique en bas de l'image
+            pdf.ln(5)
+            pdf.set_font("Helvetica", "I", 10)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(0, 10, f"Source : HYDRO-DECISIO | Document du terrain - Vue {i+1} (Nkolbisson)", align="C")
+            pdf.set_text_color(0, 0, 0) # Reset couleur
     return bytes(pdf.output())
 
 def reset_inputs():
@@ -137,7 +166,27 @@ if st.session_state.page == "home":
     """, unsafe_allow_html=True) 
 
     st.markdown("<br>", unsafe_allow_html=True)
-
+    st.markdown("""
+<style>
+    /* On crée une règle qui ne s'applique qu'au bouton de la Home Page */
+    [data-testid="stVerticalBlock"] .stButton button {
+        background: linear-gradient(90deg, #003399 0%, #1b5e20 100%) !important;
+        color: white !important;
+        border-radius: 50px !important;
+        padding: 0.75rem 2rem !important;
+        font-size: 1.2rem !important;
+        font-weight: bold !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+        transition: all 0.3s ease !important;
+    }
+    [data-testid="stVerticalBlock"] .stButton button:hover {
+        transform: scale(1.02) !important;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.3) !important;
+        background: linear-gradient(90deg, #0044cc 0%, #2e7d32 100%) !important;
+    }
+</style>
+""", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 2, 1]) 
     with c2: 
         if st.button("🚀 ACCÉDER AU DASHBOARD D'ANALYSE", use_container_width=True): 
@@ -204,20 +253,58 @@ else:
         c_vs_a = st.select_slider("Coût vs Accès", options=[1/9, 1/5, 1, 5, 9], value=1, key="c_vs_a")
         d_vs_a = st.select_slider("Dispo vs Accès", options=[1/9, 1/5, 1, 5, 9], value=1, key="d_vs_a")
 
+        st.markdown("---")
+        st.info("📍 **Zone d'étude :** Nkolbisson, Yaoundé")
+
+
     # Calculs
     matrix = np.array([[1, c_vs_d, c_vs_a], [1/c_vs_d, 1, d_vs_a], [1/c_vs_a, 1/d_vs_a, 1]])
     engine = AHPEngine()
     weights, cr = engine.compute_weights(matrix)
 
-    st.title("Dashboard💧")
-    
-    # Carte et Donut
+    st.title("Dashboard 💧")
+
+
+        # --- INITIALISATION ---
+    site_photos = [] 
+    with st.expander("📸 Informations Projet & Photos"):
+        col_p1, col_p2 = st.columns([2, 1])
+        project_name = col_p1.text_input("Nom du Projet", value="Nkolbisson - Lotissement X")
+        site_photos = col_p2.file_uploader("Photos du terrain", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+        
+        if site_photos:
+            st.write(f"✅ {len(site_photos)} photos prêtes.")
+            cols = st.columns(4)
+            for idx, img_file in enumerate(site_photos):
+                cols[idx % 4].image(img_file, use_container_width=True)
+
+    # 2. Ensuite on affiche la carte et le donut (qui utilise 'weights')
     c_m, c_d = st.columns([2, 1])
     with c_m:
+        st.markdown("##### 📍 Localisation précise du site")
         m = folium.Map(location=[3.8712, 11.4538], zoom_start=14)
-        folium.Marker([3.8712, 11.4538], popup="Nkolbisson").add_to(m)
-        folium_static(m, width=700, height=300)
+        
+        # Ajout d'un outil de clic
+        m.add_child(folium.LatLngPopup()) 
+        
+        # On capture les données de la carte
+        # returned_objects=["last_clicked"] permet de récupérer le clic
+        map_data = st_folium(m, width=700, height=300, returned_objects=["last_clicked"])
+
+        # Extraction des coordonnées
+        selected_lat = 3.8712 # Valeur par défaut
+        selected_lon = 11.4538 # Valeur par défaut
+        
+        if map_data and map_data["last_clicked"]:
+            selected_lat = map_data["last_clicked"]["lat"]
+            selected_lon = map_data["last_clicked"]["lng"]
+            st.success(f"📍 Point sélectionné : {selected_lat:.5f}, {selected_lon:.5f}")
+        else:
+            st.info("💡 Cliquez sur la carte pour définir la position exacte du forage.")
+
     with c_d:
+        st.markdown("##### 📊 Poids des Critères")
+        # Maintenant 'weights' existe forcément car calculé après la sidebar
         fig_donut = px.pie(values=weights, names=['Coût', 'Dispo', 'Accès'], hole=0.5)
         fig_donut.update_layout(height=300, margin=dict(t=0, b=0, l=0, r=0))
         st.plotly_chart(fig_donut, use_container_width=True)
@@ -270,9 +357,21 @@ else:
     seuil = (capex_f - capex_cw) / ((opex_cw - opex_f) * 12) if opex_cw > opex_f else 0
     f_data = {'capex_cw': capex_cw, 'capex_f': capex_f, 'roi_years': seuil}
     verdict = "FORAGE" if sf > scw else "CAMWATER"
-    
-    if st.download_button("📥 Télécharger le Rapport PDF", 
-                          data=generate_pdf(scw, sf, weights, cr, verdict, f_data),
-                          file_name="Rapport_HYDRO_DECISIO.pdf",
-                          use_container_width=True):
-        st.success("Rapport généré !")
+        
+    st.download_button(
+        label="📥 Télécharger le Rapport PDF Expert", 
+        data=generate_pdf(
+            score_cw=scw, 
+            score_f=sf, 
+            weights=weights, 
+            cr=cr, 
+            recommendation=verdict, 
+            fin_data=f_data,
+            uploaded_images=site_photos,
+            gps_coords=(selected_lat, selected_lon)
+        ),
+        file_name=f"Rapport_Expert_{project_name}.pdf",
+        width="stretch"
+    )
+
+        
