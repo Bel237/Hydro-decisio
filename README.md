@@ -6,7 +6,7 @@
 
 ## 🚀 Fonctionnalités Clés
 
-* **Analyse Multicritère (AHP) :** Pondération intelligente entre Coût, Disponibilité et Accessibilité via une interface intuitive.
+* **Analyse Multicritère (AHP) :**  Pondération intelligente entre Coût, Disponibilité et Accessibilité via une interface intuitive.
 * **Localisation GPS Interactive :** Sélection précise du point de projet sur une carte Folium avec capture des coordonnées en temps réel.
 * **Expertise Photo :** Module d'upload multiple pour la documentation visuelle du terrain.
 * **Projection ROI sur 10 ans :** Comparatif financier entre l'abonnement CAMWATER et l'investissement dans un forage autonome (CAPEX/OPEX).
